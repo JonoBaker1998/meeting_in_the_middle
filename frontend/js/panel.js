@@ -1,8 +1,8 @@
 import { COLORS, MODE_ICON, STEP_ICON } from "./config.js";
 import { city, selectedSpot, state } from "./state.js";
+import { esc } from "./util.js";
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
 export function routeKey(i, spot) {
   return `${state.cityId}|${i}|${state.modes[i]}|${spot.at.lat.toFixed(5)}|${spot.at.lng.toFixed(5)}`;
@@ -31,7 +31,7 @@ export function renderPanel() {
   const spot = selectedSpot();
 
   $("cities").innerHTML = state.data.cities.map((x) =>
-    `<button data-city="${x.id}" class="${x.id === state.cityId ? "on" : ""}">${esc(x.name)}</button>`).join("");
+    `<button data-city="${esc(x.id)}" class="${x.id === state.cityId ? "on" : ""}">${esc(x.name)}</button>`).join("");
 
   const allSame = new Set(state.modes).size === 1 ? state.modes[0] : null;
   document.querySelectorAll("#groupMode button").forEach((b) => {
@@ -86,8 +86,9 @@ export function renderPanel() {
     cards += '<div class="empty">Nothing matches near a fair spot — try fewer preferences or a bigger radius.</div>';
   }
   $("spots").innerHTML = cards;
+  // textContent, so no escaping needed (and none wanted: it would show "&amp;").
   $("skipped").textContent = r.skipped.length
-    ? `Skipped ${r.skipped.map((s) => s.name).join(", ")} — no ${prefWord()}${kindWord()} there` : "";
+    ? "Skipped " + r.skipped.map((s) => s.name).join(", ") + " — no " + prefWord() + kindWord() + " there" : "";
 
   const name = spot ? spot.name : "the spot";
   $("countLabel").textContent = `${r.places.length} ${prefWord()}${kindWord()} near ${name} · fairest first`;

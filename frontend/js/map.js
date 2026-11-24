@@ -1,6 +1,7 @@
 /* global L */
 import { COLORS, MODE_ICON } from "./config.js";
 import { city, selectedSpot, state } from "./state.js";
+import { esc } from "./util.js";
 
 let map, layer, heatLayer, lastFitCity = null;
 let placeMarkers = [];
@@ -36,7 +37,7 @@ export function drawResult(handlers) {
       const colour = cand.over_best <= 5 ? "#16a34a" : cand.over_best <= 9 ? "#f59e0b" : "#dc2626";
       L.circleMarker(ll(cand.at), {
         radius: 5 + Math.min(cand.matching, 10) * 1.5, color: colour, weight: 1, fillColor: colour, fillOpacity: 0.3,
-      }).bindTooltip(`${cand.name}<br>Longest trip: +${cand.over_best} min vs best<br>${cand.matching} matching places`)
+      }).bindTooltip(`${esc(cand.name)}<br>Longest trip: +${cand.over_best} min vs best<br>${cand.matching} matching places`)
         .addTo(layer);
     });
   }
@@ -46,8 +47,8 @@ export function drawResult(handlers) {
 
   const lines = c.people.map((p, i) => {
     const opened = state.open === i;
-    L.marker(ll(p.at), { icon: icon(`<div class="pin" style="background:${COLORS[i]}">${p.name[0]}</div>`, 30) })
-      .bindPopup(`<b>${p.name}</b> — ${p.area}` + (spot ? `<br>${MODE_ICON[state.modes[i]]} ${spot.times[i]} min to ${spot.name}` : ""))
+    L.marker(ll(p.at), { icon: icon(`<div class="pin" style="background:${COLORS[i]}">${esc(p.name[0])}</div>`, 30) })
+      .bindPopup(`<b>${esc(p.name)}</b> — ${esc(p.area)}` + (spot ? `<br>${MODE_ICON[state.modes[i]]} ${spot.times[i]} min to ${esc(spot.name)}` : ""))
       .addTo(layer);
     if (!spot) return null;
     return L.polyline([ll(p.at), ll(spot.at)], {
@@ -61,8 +62,8 @@ export function drawResult(handlers) {
   r.places.forEach((p) => {
     placeMarkers.push(L.marker(ll(p.at), {
       icon: icon(`<div class="ppin ${state.kind}">${state.kind === "food" ? "🍽" : "🍸"}</div>`, 22),
-    }).bindPopup(`<b>${p.name}</b><br>${p.type} · ${p.price} · ★ ${p.rating}<br>` +
-      p.times.map((t, j) => `${c.people[j].name}: ${t} min`).join("<br>")).addTo(layer));
+    }).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.type)} · ${esc(p.price)} · ★ ${p.rating}<br>` +
+      p.times.map((t, j) => `${esc(c.people[j].name)}: ${t} min`).join("<br>")).addTo(layer));
   });
 
   const markers = r.spots.map((s, k) => ({ s, label: k + 1 }));
@@ -73,7 +74,7 @@ export function drawResult(handlers) {
     const m = L.marker(ll(s.at), {
       icon: icon(`<div class="hs ${on ? "on" : ""}">${label}</div>`, size),
       zIndexOffset: on ? 2000 : 1500, draggable: on,
-    }).bindTooltip(on ? "Drag me to explore anywhere" : `${label}. ${s.name} — longest trip ${s.longest} min`,
+    }).bindTooltip(on ? "Drag me to explore anywhere" : `${label}. ${esc(s.name)} — longest trip ${s.longest} min`,
       { direction: "top", offset: [0, -18] }).addTo(layer);
     if (on) {
       m.on("drag", (e) => {
