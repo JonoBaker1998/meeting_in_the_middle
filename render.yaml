@@ -1,0 +1,15 @@
+# Render blueprint: the Python API on the free plan.
+services:
+  - type: web
+    name: meeting-in-the-middle-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # --proxy-headers makes request.client.host the visitor's real IP (needed for per-visitor rate limits).
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ALLOWED_ORIGINS
+        value: https://jonobaker1998.github.io
