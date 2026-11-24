@@ -127,14 +127,6 @@ def create_app(provider: Provider | None = None) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    @app.get("/api/_debug_ip")  # TEMPORARY: diagnose proxy headers on Render; remove after
-    def _debug_ip(request: Request) -> dict:
-        h = request.headers
-        return {"client_host": request.client.host if request.client else None,
-                "x_forwarded_for": h.get("x-forwarded-for"), "x_real_ip": h.get("x-real-ip"),
-                "cf_connecting_ip": h.get("cf-connecting-ip"), "true_client_ip": h.get("true-client-ip"),
-                "key": client_key(request)}
-
     @app.get("/api/cities")
     @limiter.limit(default_limit)
     def cities(request: Request) -> dict:

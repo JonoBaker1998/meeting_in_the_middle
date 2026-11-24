@@ -12,7 +12,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+      # Render's X-Forwarded-For is "<visitor>, <Cloudflare>, <Render load balancer>":
+      # the visitor is the 3rd entry from the right (verified live 2026-11-24).
       - key: TRUSTED_PROXY_HOPS
-        value: "1"
+        value: "3"
       - key: ALLOWED_ORIGINS
         value: https://jonobaker1998.github.io

@@ -85,3 +85,12 @@ def test_limits_configurable_by_env(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_SEARCH", "2/minute")
     c = TestClient(create_app())
     assert [c.post("/api/search", json=B).status_code for _ in range(3)] == [200, 200, 429]
+
+
+def test_render_chain_visitor_cloudflare_loadbalancer(monkeypatch):
+    # Shape observed live on Render: "<visitor>, <cloudflare>, <render LB>"; the LB IP varies per request.
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "3")
+    assert client_key(_Req("x", "203.0.113.7, 172.71.0.1, 10.27.0.5")) == "203.0.113.7"
+    assert client_key(_Req("x", "203.0.113.7, 172.71.0.1, 10.28.0.9")) == "203.0.113.7"
+    # a visitor-supplied X-Forwarded-For only adds entries on the left
+    assert client_key(_Req("x", "6.6.6.6,203.0.113.7, 172.71.0.1, 10.28.0.9")) == "203.0.113.7"
