@@ -6,6 +6,7 @@ import { city, debounce, selectedSpot, state } from "./state.js";
 
 const $ = (id) => document.getElementById(id);
 let searchSeq = 0;
+let lastGood = { custom: null, selected: null }; // custom spot + selection from the last successful search
 const heatCache = {};
 
 function render() {
@@ -32,13 +33,16 @@ async function runSearch() {
     if (seq !== searchSeq) return; // a newer search has been sent; ignore this one
     state.result = result;
     state.selected = result.selected;
+    lastGood = { custom: state.custom, selected: state.selected };
     render();
     loadOpenRoute();
   } catch (err) {
     if (seq !== searchSeq) return;
     if (err.status === 422 && state.custom) {
-      state.custom = null; // e.g. dragged outside the city
-      if (state.selected === "custom") state.selected = null;
+      // e.g. dragged outside the city: go back to the last spot the server accepted,
+      // which is what state.result still shows.
+      state.custom = lastGood.custom;
+      state.selected = lastGood.selected;
       render();
     }
     showError(err);
@@ -79,6 +83,7 @@ function selectCity(id) {
   state.custom = null;
   state.open = -1;
   state.result = null;
+  lastGood = { custom: null, selected: null };
   render();
   refreshHeat();
   requestSearch();
@@ -116,13 +121,13 @@ async function start() {
   api.setSlowHandler((slow) => slow
     ? showBanner("Waking up the server… this can take up to a minute the first time.")
     : hideBanner());
-  wire();
   try {
     state.data = await api.getCities();
   } catch (err) {
     showError(err);
     return;
   }
+  wire(); // only once cities are loaded, so early clicks during a cold start can't send broken searches
   state.radius = state.data.radius.default;
   selectCity(state.data.cities[0].id);
 }
