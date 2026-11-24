@@ -40,14 +40,31 @@ async def test_rate_limit_is_per_client():
         assert (await b.post("/api/search", json=B)).status_code == 200
 
 
-def test_rate_limit_key_is_connection_ip_not_raw_header():
-    # On Render, uvicorn --proxy-headers turns X-Forwarded-For into request.client.host.
-    # The key must use that, never a raw header a visitor could fake.
-    class R:
-        client = type("C", (), {"host": "9.9.9.9"})()
-        headers = {"x-forwarded-for": "6.6.6.6"}
+class _Req:
+    def __init__(self, host, xff=None):
+        self.client = type("C", (), {"host": host})()
+        self.headers = {"x-forwarded-for": xff} if xff else {}
 
-    assert client_key(R()) == "9.9.9.9"
+
+def test_rate_limit_key_ignores_forwarded_header_without_trusted_proxy(monkeypatch):
+    monkeypatch.delenv("TRUSTED_PROXY_HOPS", raising=False)
+    assert client_key(_Req("9.9.9.9", "6.6.6.6")) == "9.9.9.9"
+
+
+def test_rate_limit_key_uses_entry_added_by_trusted_proxy(monkeypatch):
+    # Render's proxy appends the real visitor IP to whatever the visitor sent.
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+    assert client_key(_Req("10.0.0.1", "1.2.3.4, 203.0.113.7")) == "203.0.113.7"
+    assert client_key(_Req("10.0.0.1", "203.0.113.7")) == "203.0.113.7"
+    assert client_key(_Req("10.0.0.1")) == "10.0.0.1"
+
+
+def test_spoofed_forwarded_header_cannot_dodge_rate_limit(monkeypatch):
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+    c = TestClient(create_app())
+    codes = [c.post("/api/search", json=B, headers={"X-Forwarded-For": f"6.6.6.{i}, 203.0.113.7"}).status_code
+             for i in range(31)]
+    assert codes[30] == 429
 
 
 def test_body_too_large():

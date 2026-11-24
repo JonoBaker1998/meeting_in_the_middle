@@ -35,8 +35,19 @@ def _setting(name: str) -> str:
 
 
 def client_key(request) -> str:
-    """Rate-limit key: the connection's IP. Behind Render, uvicorn's --proxy-headers
-    has already replaced this with the visitor's real IP; we never read raw headers."""
+    """Rate-limit key: the visitor's IP.
+
+    Locally (TRUSTED_PROXY_HOPS=0, the default) this is the connection's IP and
+    X-Forwarded-For is ignored. Behind Render's proxy (TRUSTED_PROXY_HOPS=1) the
+    real IP is the entry the proxy appended: the Nth from the RIGHT. Entries to
+    the left came from the visitor and can be faked, so they are never used.
+    """
+    hops = int(os.environ.get("TRUSTED_PROXY_HOPS", "0"))
+    forwarded = request.headers.get("x-forwarded-for") if hops > 0 else None
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if len(parts) >= hops:
+            return parts[-hops]
     return request.client.host if request.client else "unknown"
 
 
