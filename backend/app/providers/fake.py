@@ -46,8 +46,9 @@ DRINKS = [
     ("Sample Sports Bar", "Pub", 3.9, "$"),
 ]
 TEMPLATES = {"food": FOOD, "drinks": DRINKS}
-TYPES_KEPT_PER_AREA = {"food": 5, "drinks": 3}  # of 9 food / 5 drink types
-PLACES_PER_AREA = (6, 10)
+# Busier hotspots (higher weight) offer more variety: share of types kept = 0.4 + 0.5 * weight.
+TYPE_SHARE_BASE, TYPE_SHARE_PER_WEIGHT = 0.4, 0.5
+PLACES_PER_AREA = (6, 10)  # plus up to 4 more for the strongest hotspots
 SCATTER_M = (50, 1200)
 HEAT_POINTS_PER_WEIGHT = 12
 HEAT_SPREAD_M = 650
@@ -141,10 +142,11 @@ def _place_pool(city_id: str, kind: str) -> tuple[Place, ...]:
     pool = []
     for h in HOT_NEIGHBOURHOODS[city_id]:
         rng = random.Random(_seed(city_id, h["name"], kind))
-        kept = set(rng.sample(all_types, TYPES_KEPT_PER_AREA[kind]))
+        share = TYPE_SHARE_BASE + TYPE_SHARE_PER_WEIGHT * h["weight"]
+        kept = set(rng.sample(all_types, min(len(all_types), math.ceil(len(all_types) * share))))
         options = [t for t in templates if t[1] in kept]
         centre = LatLng(h["lat"], h["lng"])
-        for i in range(rng.randint(*PLACES_PER_AREA)):
+        for i in range(rng.randint(*PLACES_PER_AREA) + round(4 * h["weight"])):
             name, ptype, rating, price = options[i % len(options)] if i < len(options) else rng.choice(options)
             ang, dist = rng.uniform(0, 2 * math.pi), rng.uniform(*SCATTER_M)
             pool.append(Place(

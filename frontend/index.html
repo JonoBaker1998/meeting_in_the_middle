@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meet in the Middle</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Meet in the Middle</h1>
+    <span class="tag">Demo data · fake times, routes &amp; places</span>
+    <div id="banner" class="banner" hidden></div>
+
+    <div class="label">City</div>
+    <div class="seg" id="cities"></div>
+
+    <div class="label">Everyone travels by</div>
+    <div class="seg" id="groupMode">
+      <button data-m="transit">🚇 Public transport</button>
+      <button data-m="bike">🚲 Bike</button>
+      <button data-m="car">🚗 Car</button>
+    </div>
+
+    <div class="label">Who's coming <span>· tap a person for their route</span></div>
+    <div id="people"></div>
+    <button class="add" title="Coming soon" disabled>+ Add person</button>
+
+    <div class="label">Looking for</div>
+    <div class="seg" id="kind">
+      <button data-k="food" class="on">🍽 Restaurants</button>
+      <button data-k="drinks">🍸 Bars</button>
+    </div>
+    <div class="prefs" id="prefs"></div>
+
+    <div class="label">Top spots <span>· click the numbers, or drag the orange one</span></div>
+    <div id="spots"></div>
+    <div id="skipped" class="skipped"></div>
+    <label class="check"><input type="checkbox" id="showHeat"> 🔥 Show where the top-rated places are</label>
+    <label class="check"><input type="checkbox" id="showHow"> Show how these were picked</label>
+    <div class="legend" id="legend" hidden>
+      <span><i style="background:#16a34a"></i>fair zone</span>
+      <span><i style="background:#f59e0b"></i>a bit unfair</span>
+      <span><i style="background:#dc2626"></i>unfair</span>
+      <span>bigger dot = more matching places</span>
+    </div>
+
+    <div class="radius">
+      <small>Within</small>
+      <input type="range" id="radius" min="300" max="1500" step="100" value="800">
+      <small id="radiusVal">800 m</small>
+    </div>
+
+    <div class="label" id="countLabel">Places</div>
+    <div id="places"></div>
+  </aside>
+  <div id="map"></div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
