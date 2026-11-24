@@ -1,9 +1,14 @@
 """FastAPI application: JSON API for Meet in the Middle, plus the static website."""
 
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 
 from backend.app import engine
 from backend.app.data.cities import CITIES, PREFS, City
@@ -14,6 +19,58 @@ from backend.app.schemas import (RADIUS_DEFAULT, RADIUS_MAX, RADIUS_MIN, RADIUS_
                                  SearchRequest)
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+DEFAULTS = {
+    "RATE_LIMIT_SEARCH": "30/minute",
+    "RATE_LIMIT_DEFAULT": "60/minute",
+    "ALLOWED_ORIGINS": "http://localhost:8000,http://127.0.0.1:8000,https://jonobaker1998.github.io",
+    "MAX_BODY_BYTES": "10240",
+}
+TOO_MANY = "Too many requests — please slow down."
+TOO_LARGE = "Request too large."
+
+
+def _setting(name: str) -> str:
+    return os.environ.get(name, DEFAULTS[name])
+
+
+def client_key(request) -> str:
+    """Rate-limit key: the connection's IP. Behind Render, uvicorn's --proxy-headers
+    has already replaced this with the visitor's real IP; we never read raw headers."""
+    return request.client.host if request.client else "unknown"
+
+
+class _TooLarge(Exception):
+    pass
+
+
+class BodySizeLimit:
+    """Reject request bodies over max_bytes with 413, whether or not Content-Length is sent."""
+
+    def __init__(self, app, max_bytes: int):
+        self.app, self.max_bytes = app, max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        length = dict(scope["headers"]).get(b"content-length")
+        if length is not None and (not length.isdigit() or int(length) > self.max_bytes):
+            return await JSONResponse({"detail": TOO_LARGE}, 413)(scope, receive, send)
+        seen = 0
+
+        async def limited_receive():
+            nonlocal seen
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self.max_bytes:
+                    raise _TooLarge
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _TooLarge:
+            await JSONResponse({"detail": TOO_LARGE}, 413)(scope, receive, send)
 
 
 def _at(p: LatLng) -> dict:
@@ -47,12 +104,21 @@ def create_app(provider: Provider | None = None) -> FastAPI:
     provider = provider or FakeProvider()
     app = FastAPI(title="Meet in the Middle")
 
+    limiter = Limiter(key_func=client_key)  # fresh in-memory counters per app
+    app.state.limiter = limiter
+    search_limit, default_limit = _setting("RATE_LIMIT_SEARCH"), _setting("RATE_LIMIT_DEFAULT")
+
+    @app.exception_handler(RateLimitExceeded)
+    async def _too_many(request: Request, exc: RateLimitExceeded):
+        return JSONResponse({"detail": TOO_MANY}, status_code=429)
+
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
 
     @app.get("/api/cities")
-    def cities() -> dict:
+    @limiter.limit(default_limit)
+    def cities(request: Request) -> dict:
         return {
             "cities": [{
                 "id": c.id, "name": c.name, "modes": list(c.modes), "default_mode": c.default_mode,
@@ -64,7 +130,8 @@ def create_app(provider: Provider | None = None) -> FastAPI:
         }
 
     @app.post("/api/search")
-    def search(req: SearchRequest) -> dict:
+    @limiter.limit(search_limit)
+    def search(request: Request, req: SearchRequest) -> dict:
         city = _city_or_404(req.city)
         if len(req.modes) != len(city.people):
             raise HTTPException(422, detail=f"{city.name} has {len(city.people)} people; got {len(req.modes)} modes")
@@ -98,7 +165,8 @@ def create_app(provider: Provider | None = None) -> FastAPI:
         }
 
     @app.get("/api/route")
-    def route(city: str = Query(max_length=32), person: int = Query(ge=0),
+    @limiter.limit(default_limit)
+    def route(request: Request, city: str = Query(max_length=32), person: int = Query(ge=0),
               mode: Mode = Query(), lat: float = Query(ge=-90, le=90),
               lng: float = Query(ge=-180, le=180)) -> dict:
         c = _city_or_404(city)
@@ -112,8 +180,15 @@ def create_app(provider: Provider | None = None) -> FastAPI:
         return {"steps": [{"icon": s.icon, "text": s.text} for s in steps]}
 
     @app.get("/api/heat")
-    def heat(city: str = Query(max_length=32)) -> dict:
+    @limiter.limit(default_limit)
+    def heat(request: Request, city: str = Query(max_length=32)) -> dict:
         return {"points": [list(p) for p in provider.heat(_city_or_404(city))]}
+
+    # Added last = outermost, so 413 and 429 responses still carry CORS headers.
+    app.add_middleware(BodySizeLimit, max_bytes=int(_setting("MAX_BODY_BYTES")))
+    app.add_middleware(CORSMiddleware,
+                       allow_origins=[o.strip() for o in _setting("ALLOWED_ORIGINS").split(",") if o.strip()],
+                       allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
     if FRONTEND_DIR.is_dir():
         app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
